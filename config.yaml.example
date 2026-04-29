@@ -1,0 +1,116 @@
+# UDS Assistant 配置文件
+# 复制此文件为 config.yaml 并填入你的 API Key
+
+providers:
+  # 第1梯队：OpenRouter（全球）
+  # 从 openrouter.ai 获取 API Key
+  - name: "openrouter"
+    base_url: "https://openrouter.ai/api/v1"
+    api_key: ""
+    models:
+      extract: "deepseek/deepseek-chat-v3-0324"
+      generate: "moonshotai/kimi-k2.5"
+    cost_per_million: 0.60
+    region: "global"
+
+  # 第2梯队：智谱 GLM（国内直连）
+  # 从 open.bigmodel.cn 获取 API Key
+  - name: "zhipu"
+    base_url: "https://open.bigmodel.cn/api/coding/paas/v4"
+    api_key: ""
+    models:
+      extract: "glm-4-flash"
+      generate: "glm-4-flash"
+    cost_per_million: 0.10
+    region: "china"
+
+  # 第3梯队：DeepSeek 官方 API（国内直连）
+  # 从 platform.deepseek.com 获取 API Key
+  - name: "deepseek_direct"
+    base_url: "https://api.deepseek.com/v1"
+    api_key: ""
+    models:
+      extract: "deepseek-chat"
+      generate: "deepseek-chat"
+    cost_per_million: 0.27
+    region: "china"
+
+  # 第4梯队：阿里通义千问（国内直连）
+  # 从 dashscope.console.aliyun.com 获取 API Key
+  - name: "qwen_direct"
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    api_key: ""
+    models:
+      extract: "qwen-plus"
+      generate: "qwen-max"
+    cost_per_million: 0.55
+    region: "china"
+
+failover:
+  max_retries_per_provider: 1
+  retry_delay_seconds: 2
+  timeout_seconds: 600
+  fallback_on_status_codes:
+    - 403
+    - 429
+    - 502
+    - 503
+    - 504
+
+  health_check:
+    fail_threshold: 3
+    window_seconds: 300
+
+  retry_temperature:
+    increment: 0.05
+    max: 0.2
+
+generation:
+  author: "Percy"
+  design_method: "Based on analysis of requirements"
+  default_priority: "High"
+  precondition: "1.Power On;"
+  system_requirement_id: "1.General\n2.DiagnosticServices"
+  max_tokens: 32000
+
+service_prompts:
+  "0x10": "prompts/service_0x10_prompt.md"
+  "0x11": "prompts/service_0x11_prompt.md"
+  "0x14": "prompts/service_0x14_prompt.md"
+  "0x19": "prompts/service_0x19_prompt.md"
+  "0x22": "prompts/service_0x22_prompt.md"
+  "0x27": "prompts/service_0x27_prompt.md"
+  "0x28": "prompts/service_0x28_prompt.md"
+  "0x2e": "prompts/service_0x2E_prompt.md"
+  "0x31": "prompts/service_0x31_prompt.md"
+  "0x3e": "prompts/service_0x3E_prompt.md"
+  "0x85": "prompts/service_0x85_prompt.md"
+
+excel:
+  max_rows_per_sheet: 200
+  relevant_keywords:
+    - "basic"
+    - "diagnostic"
+    - "service"
+    - "did"
+    - "dtc"
+    - "routine"
+    - "session"
+    - "nrc"
+    - "timing"
+    - "general"
+    - "0x"
+    - "诊断"
+    - "服务"
+  exclude_keywords:
+    - "history"
+    - "change"
+    - "revision"
+    - "instruction"
+    - "formula"
+    - "predefined"
+    - "template"
+    - "legend"
+    - "kangatang"
+    - "document"
+    - "cover"

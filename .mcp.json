@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "excel-parser": {
+      "command": "python",
+      "args": ["F:/UDS_ASSISTANT/mcp_server.py"]
+    }
+  }
+}

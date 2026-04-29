@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+.venv/
+venv/
+
+# Config (contains API keys)
+config.yaml
+
+# Input/Output (proprietary OEM data and generated artifacts)
+input/
+output/
+
+# Logs
+logs/
+
+# Lock file (regenerate with `uv lock`)
+uv.lock
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code
+.claude/
+
+# Office temp files
+~$*

@@ -1,0 +1,16 @@
+[project]
+name = "uds-assistant"
+version = "0.1.0"
+description = "UDS diagnostic test case auto-generation agent"
+requires-python = ">=3.12"
+dependencies = [
+    "openpyxl>=3.1.0",
+    "xlrd>=2.0.0",
+    "pydantic>=2.0",
+    "httpx>=0.25",
+    "mcp>=1.27.0",
+    "fastapi>=0.100",
+    "uvicorn>=0.20",
+    "python-multipart>=0.0.5",
+    "pyyaml>=6.0.3",
+]
