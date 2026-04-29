@@ -119,11 +119,6 @@ FRONTEND_HTML = r"""
   .diag-kv { display: flex; gap: 6px; }
   .diag-kv .dk-label { color: #888; min-width: 100px; }
   .diag-kv .dk-value { font-weight: 500; }
-  .finding { padding: 4px 8px; margin: 2px 0; border-radius: 3px; font-size: 12px; }
-  .finding-error { background: #fff2f0; border-left: 3px solid #ff4d4f; }
-  .finding-warning { background: #fffbe6; border-left: 3px solid #faad14; }
-  .finding-info { background: #e6f4ff; border-left: 3px solid #1677ff; }
-  .finding-fixed { background: #f6ffed; border-left: 3px solid #52c41a; }
   .diag-arrow { transition: transform .2s; display: inline-block; }
   .diag-arrow.open { transform: rotate(90deg); }
 </style>
@@ -156,10 +151,6 @@ FRONTEND_HTML = r"""
 
   <div id="result-area">
     <div class="card" id="summaryCard"></div>
-    <div class="card" id="diagCard" style="display:none">
-      <h3>管道诊断信息</h3>
-      <div id="diagContent"></div>
-    </div>
     <div class="card">
       <h3>测试用例详情</h3>
       <div id="caseTabs"></div>
@@ -398,7 +389,7 @@ async function doExport() {
     URL.revokeObjectURL(a.href);
     setStatus(`导出成功！${collected.length} 个服务，耗时 ${totalElapsed}s`, 'status-ok');
 
-    // Show results with diagnostics
+    // Show results
     lastResult = { ecu_info: {}, services: collected, meta: { success_count: collected.length, total_elapsed_seconds: totalElapsed } };
     showResult(lastResult);
   } catch(e) {
@@ -414,9 +405,7 @@ function showResult(data) {
   const summary = document.getElementById('summaryCard');
   summary.innerHTML = '<h3>生成结果概览</h3>' +
     data.services.map(s => {
-      const d = s.meta && s.meta.extraction_diagnostics;
-      const hint = d ? ` | Extracted: ${d.extraction_counts.app_subfunctions} subfuncs, ${d.extraction_counts.did_count} DIDs, ${d.extraction_counts.dtc_count} DTCs` : '';
-      return `<p class="summary">${s.sheet_name}: <b>${s.total_count}</b> 条用例 (${s.meta.elapsed_seconds}s)${hint}</p>`;
+      return `<p class="summary">${s.sheet_name}: <b>${s.total_count}</b> 条用例 (${s.meta.elapsed_seconds}s)</p>`;
     }).join('');
 
   const tabs = document.getElementById('caseTabs');
@@ -425,114 +414,6 @@ function showResult(data) {
   ).join('');
   showTab(0);
   document.getElementById('jsonOutput').textContent = JSON.stringify(data, null, 2);
-  showDiagnostics(data);
-}
-
-function showDiagnostics(data) {
-  const card = document.getElementById('diagCard');
-  const content = document.getElementById('diagContent');
-  if (!data.services || !data.services.length) { card.style.display = 'none'; return; }
-  const hasDiag = data.services.some(s => s.meta && s.meta.extraction_diagnostics);
-  if (!hasDiag) { card.style.display = 'none'; return; }
-  card.style.display = 'block';
-  let html = '';
-  data.services.forEach((svc, idx) => {
-    const d = svc.meta && svc.meta.extraction_diagnostics;
-    if (!d) return;
-    html += renderDiagPanel(svc.service_id, d, idx);
-  });
-  content.innerHTML = html;
-}
-
-function toggleDiagBody(id) {
-  const body = document.getElementById(id);
-  const arrow = document.getElementById(id + '-arrow');
-  if (body) body.classList.toggle('open');
-  if (arrow) arrow.classList.toggle('open');
-}
-
-function renderDiagPanel(serviceId, d, idx) {
-  const panelId = 'diag-' + idx;
-  let h = `<div class="diag-panel">`;
-  h += `<div class="diag-header" onclick="toggleDiagBody('${panelId}')">`;
-  h += `<span>${serviceId} — 提取诊断</span>`;
-  h += `<span class="diag-arrow" id="${panelId}-arrow">&#9654;</span>`;
-  h += `</div>`;
-  h += `<div class="diag-body" id="${panelId}">`;
-
-  // Timing & LLM
-  h += `<div class="diag-section"><h4>Timing & LLM</h4><div class="diag-grid">`;
-  h += kv('Extraction', (d.timing.extraction_seconds || 0).toFixed(1) + 's');
-  h += kv('Generation', (d.timing.generation_seconds || 0).toFixed(1) + 's');
-  h += kv('Total', (d.timing.total_seconds || 0).toFixed(1) + 's');
-  h += kv('Extraction Model', (d.extraction_llm.provider || '?') + ' / ' + (d.extraction_llm.model || '?'));
-  const genModel = 'provider' in (d.extraction_llm || {}) ? '' : '';
-  h += `</div></div>`;
-
-  // Excel Input
-  h += `<div class="diag-section"><h4>Excel Input</h4><div class="diag-grid">`;
-  h += kv('Text Length', (d.excel_input.text_length || 0).toLocaleString() + ' chars');
-  const sheets = (d.excel_input.sheets_filtered || []).join(', ') || '(none)';
-  h += kv('Sheets Used', sheets);
-  h += `</div></div>`;
-
-  // Extraction Counts
-  h += `<div class="diag-section"><h4>Extraction Counts</h4><div class="diag-grid">`;
-  const c = d.extraction_counts || {};
-  h += kv('App Subfunctions', c.app_subfunctions || 0);
-  h += kv('Boot Subfunctions', c.boot_subfunctions || 0);
-  h += kv('DIDs', c.did_count || 0);
-  h += kv('DTCs', c.dtc_count || 0);
-  h += kv('Routines', c.routine_count || 0);
-  h += kv('Security Levels', c.security_levels || 0);
-  h += kv('Reset Subfuncs', c.reset_subfunctions || 0);
-  h += `</div></div>`;
-
-  // Basic Info
-  const bi = d.basic_info_summary || {};
-  if (bi.ecu_name || bi.p2_ms) {
-    h += `<div class="diag-section"><h4>Basic Info</h4><div class="diag-grid">`;
-    h += kv('ECU', bi.ecu_name || '-');
-    h += kv('P2', (bi.p2_ms || 0) + 'ms');
-    h += kv('P2*', (bi.p2star_ms || 0) + 'ms');
-    h += kv('S3', (bi.s3_ms || 0) + 'ms');
-    h += kv('CAN Req', bi.canid_req || '-');
-    h += kv('CAN Resp', bi.canid_resp || '-');
-    h += `</div></div>`;
-  }
-
-  // Validation Findings
-  const v = d.validation || {};
-  const findings = v.findings || [];
-  if (findings.length > 0) {
-    h += `<div class="diag-section"><h4>Validation Findings (${v.auto_fixes_applied || 0} auto-fixed)</h4>`;
-    findings.forEach(f => {
-      let cls = 'finding';
-      if (f.auto_fixed) cls += ' finding-fixed';
-      else if (f.severity === 'error') cls += ' finding-error';
-      else if (f.severity === 'warning') cls += ' finding-warning';
-      else cls += ' finding-info';
-      let txt = `<b>[${f.severity.toUpperCase()}]</b> ${f.rule_id}: ${f.message}`;
-      if (f.auto_fixed && f.old_value) txt += ` <i>(${f.old_value} -> ${f.new_value})</i>`;
-      h += `<div class="${cls}">${txt}</div>`;
-    });
-    h += `</div>`;
-  }
-
-  // Errors
-  const errs = d.errors || [];
-  if (errs.length > 0) {
-    h += `<div class="diag-section"><h4>Errors</h4>`;
-    errs.forEach(e => { h += `<div class="finding finding-error">${e}</div>`; });
-    h += `</div>`;
-  }
-
-  h += `</div></div>`;
-  return h;
-}
-
-function kv(label, value) {
-  return `<div class="diag-kv"><span class="dk-label">${label}:</span><span class="dk-value">${value}</span></div>`;
 }
 
 function showTab(idx) {

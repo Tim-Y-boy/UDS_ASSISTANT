@@ -1,4 +1,4 @@
-"""模块三：测试用例生成管道。Excel → 提取参数 → LLM 生成用例 → 解析输出。"""
+"""测试用例生成管道。Excel → 文本 → LLM 直接生成用例 → 解析输出。"""
 
 from __future__ import annotations
 
@@ -14,33 +14,10 @@ from .prompt_loader import (
     load_generation_config,
     load_service_prompt,
 )
-from .schemas import ValidationReport
 from .test_parser import parse_summary, parse_test_cases
 from .test_schemas import ServiceTestResult
 
 logger = logging.getLogger("generate_pipeline")
-
-
-def _serialize_validation_report(report: ValidationReport | None) -> dict:
-    if report is None:
-        return {"findings": [], "auto_fixes_applied": 0}
-    return {
-        "findings": [
-            {
-                "rule_id": f.rule_id,
-                "severity": f.severity,
-                "message": f.message,
-                "field_path": f.field_path,
-                "auto_fixed": f.auto_fixed,
-                "old_value": f.old_value,
-                "new_value": f.new_value,
-            }
-            for f in report.findings
-        ],
-        "auto_fixes_applied": report.auto_fixes_applied,
-        "tier1_duration_ms": report.tier1_duration_ms,
-        "tier2_duration_ms": report.tier2_duration_ms,
-    }
 
 
 def _build_diagnostics(
@@ -48,8 +25,6 @@ def _build_diagnostics(
     llm_response: LLMResponse | None,
     total_elapsed: float,
 ) -> dict:
-    r = extraction.result
-    bi = r.basic_info
     return {
         "timing": {
             "extraction_seconds": round(extraction.elapsed_seconds, 2),
@@ -60,35 +35,12 @@ def _build_diagnostics(
             "text_length": extraction.excel_text_length,
             "sheets_filtered": extraction.sheets_filtered,
         },
-        "extraction_llm": {
-            "provider": extraction.provider_used,
-            "model": extraction.model_used,
-            "usage": extraction.llm_usage,
-        },
-        "extraction_counts": {
-            "app_subfunctions": len(r.service_matrix.subfunctions),
-            "boot_subfunctions": len(r.boot_matrix.subfunctions) if r.boot_matrix else 0,
-            "did_count": len(r.did_list),
-            "dtc_count": len(r.dtc_list),
-            "routine_count": len(r.routine_list),
-            "security_levels": len(r.security_list),
-            "reset_subfunctions": len(r.reset_subfunctions),
-        },
-        "basic_info_summary": {
-            "ecu_name": bi.ecu_name,
-            "p2_ms": bi.p2_ms,
-            "p2star_ms": bi.p2star_ms,
-            "s3_ms": bi.s3_ms,
-            "canid_req": bi.canid_req,
-            "canid_resp": bi.canid_resp,
-        },
-        "validation": _serialize_validation_report(extraction.validation_report),
         "errors": extraction.errors,
     }
 
 
 class UDSGeneratePipeline:
-    """完整生成管道：提取参数 → 加载提示词 → LLM 生成 → 解析输出。"""
+    """生成管道：读取 Excel 文本 → 加载提示词 → LLM 生成 → 解析输出。"""
 
     def __init__(self, config_path: str = "config.yaml"):
         self._extract_pipeline = UDSExtractionPipeline(config_path=config_path)
@@ -104,11 +56,11 @@ class UDSGeneratePipeline:
         service_id: str,
         domain: str = "App",
     ) -> ServiceTestResult:
-        """执行完整的生成管道。同时提取 App+Boot 双域参数。"""
+        """执行完整的生成管道。"""
         start = time.time()
 
-        # 1. 提取参数（同时提取 App+Boot 双域）
-        logger.info(f"[{service_id}] 开始提取参数（App+Boot 双域）...")
+        # 1. 读取 Excel 文本
+        logger.info(f"[{service_id}] 读取 Excel 文本...")
         extraction = self._extract_pipeline.extract(
             excel_path=excel_path,
             service_id=service_id,
@@ -116,17 +68,10 @@ class UDSGeneratePipeline:
         )
 
         if extraction.errors:
-            logger.warning(f"[{service_id}] 提取有错误: {extraction.errors}")
+            logger.warning(f"[{service_id}] Excel 读取有错误: {extraction.errors}")
 
-        has_boot = (
-            extraction.result.boot_matrix
-            and extraction.result.boot_matrix.subfunctions
-        )
         logger.info(
-            f"[{service_id}] 提取完成: App={len(extraction.result.service_matrix.subfunctions)} 子功能"
-            f"{f', Boot={len(extraction.result.boot_matrix.subfunctions)} 子功能' if has_boot else ', 无 Boot 域'}"
-            f", Security={len(extraction.result.security_list)}"
-            f", Reset={len(extraction.result.reset_subfunctions)}"
+            f"[{service_id}] Excel 文本长度: {extraction.excel_text_length} 字符"
         )
 
         # 2. 加载服务提示词
@@ -145,9 +90,10 @@ class UDSGeneratePipeline:
                 },
             )
 
-        # 3. 构建 user message（生成全部类别）
+        # 3. 构建 user message（直接使用 Excel 原始文本）
         user_message = build_generation_user_message(
-            extraction.result, service_id,
+            excel_text=extraction.excel_text,
+            service_id=service_id,
         )
 
         logger.info(
@@ -188,10 +134,10 @@ class UDSGeneratePipeline:
         summary = parse_summary(llm_response.content)
 
         # 6. 填充配置字段
-        author = self._gen_config.get("author", "Percy")
-        design_method = self._gen_config.get("design_method", "Based on analysis of requirements")
-        precondition = self._gen_config.get("precondition", "1.Power On;")
-        sys_req_id = self._gen_config.get("system_requirement_id", "1.General\n2.DiagnosticServices")
+        author = self._gen_config.get("author", "")
+        design_method = self._gen_config.get("design_method", "")
+        precondition = self._gen_config.get("precondition", "")
+        sys_req_id = self._gen_config.get("system_requirement_id", "")
 
         for tc in test_cases:
             tc.author = author
@@ -204,12 +150,8 @@ class UDSGeneratePipeline:
             f"[{service_id}] 生成完成: {len(test_cases)} 条用例, {elapsed:.1f}s"
         )
 
-        # 从提取结果或配置映射获取 service_name
         sid_key = service_id.lower()
-        service_name = (
-            extraction.result.service_matrix.service_name
-            or SERVICE_NAMES.get(sid_key, "")
-        )
+        service_name = SERVICE_NAMES.get(sid_key, "")
 
         return ServiceTestResult(
             service_id=service_id,
@@ -223,7 +165,6 @@ class UDSGeneratePipeline:
                 "model": llm_response.model if llm_response else "unknown",
                 "elapsed_seconds": round(elapsed, 2),
                 "llm_tokens": llm_response.usage.get("total_tokens", 0) if llm_response else 0,
-                "extraction_warnings": extraction.validation_warnings,
                 "extraction_diagnostics": _build_diagnostics(extraction, llm_response, elapsed),
             },
         )
