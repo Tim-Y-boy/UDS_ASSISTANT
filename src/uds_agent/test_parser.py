@@ -44,6 +44,8 @@ def parse_test_cases(text: str, service_id: str) -> list[TestCaseRow]:
 
     if _is_markdown_format(cases_text):
         raw_cases, section_map = _parse_markdown(cases_text)
+    elif _is_pipe_table_format(cases_text):
+        raw_cases, section_map = _parse_pipe_table(cases_text)
     else:
         raw_cases, section_map = _parse_colon(cases_text)
 
@@ -98,6 +100,53 @@ def _is_markdown_format(text: str) -> bool:
         if RE_MD_CASE_ID.match(line.strip()):
             return True
     return False
+
+
+def _is_pipe_table_format(text: str) -> bool:
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if stripped.startswith("|") and RE_CASE_ID.search(stripped):
+            return True
+    return False
+
+
+def _parse_pipe_table(text: str) -> tuple[list[dict], dict[str, str]]:
+    raw_cases: list[dict] = []
+    section_map: dict[str, str] = {}
+    current_section = ""
+
+    for line in text.split("\n"):
+        stripped = line.strip()
+
+        # ### header: section
+        if stripped.startswith("### "):
+            header = stripped[4:].strip().strip("*").strip()
+            m = re.match(r"^[\d.]+\s+(.+)$", header)
+            current_section = m.group(1) if m else header
+            continue
+
+        # pipe table row with Case ID
+        if not stripped.startswith("|"):
+            continue
+        cells = [c.strip() for c in stripped.split("|")[1:-1]]
+        if len(cells) < 4:
+            continue
+
+        first_cell = cells[0]
+        if not RE_CASE_ID.search(first_cell):
+            continue
+
+        raw_cases.append({
+            "case_id": first_cell,
+            "case_name": cells[1] if len(cells) > 1 else "",
+            "test_procedure": cells[2] if len(cells) > 2 else "",
+            "expected_output": cells[3] if len(cells) > 3 else "",
+            "section_name": current_section,
+            "is_boot": "boot" in current_section.lower(),
+        })
+        section_map[first_cell] = current_section
+
+    return raw_cases, section_map
 
 
 # ---------------------------------------------------------------------------

@@ -27,9 +27,25 @@
 
 ---
 
-## 生成分类（共 7 类）
+## 整体结构要求
 
-按以下固定顺序逐类生成，每个分类之间用 `--service ID 0x11 <分类名>` 分隔。分类标题格式示例：`--service ID 0x11 Session Layer Test`
+每个软件域（App / Boot）每种寻址方式（Physical / Functional）必须独立生成完整用例集。
+
+生成顺序：
+1. **App Physical** — 标题 `1.Application Service_Physical Addressing`
+2. **App Functional** — 标题 `2.Application Service_Functional Addressing`（仅当 Functional=Y）
+3. **Boot Physical** — 标题 `3.Boot Service_Physical Addressing`
+4. **Boot Functional** — 标题 `4.Boot Service_Functional Addressing`（仅当 Functional=Y）
+
+每组内部包含以下分类（按顺序），分类之间用 `--service ID 0x11 <分类名>` 分隔：
+1. Session Layer Test
+2. SPRMIB Test
+3. Secure Access Test（即使无安全限制也必须生成验证用例）
+4. Reset Effect Test（客户扩展）
+5. Sub-function Traversal Test
+6. Incorrect Diagnostic Command Test
+7. NRC Priority Test（仅 Physical 寻址需要）
+8. Functional Addressing Test（仅当 Functional 不支持时）
 
 ---
 
@@ -38,10 +54,13 @@
 
 #### 用例数量规则
 
-- `Npos` = 支持的 0x11 子功能正向 case 数（每个支持子功能 1 条）
-- `Nneg_sf` = 不支持的 0x11 子功能 case 数（每个不支持子功能 1 条）
-- `Nneg_sess` = 当前会话不支持 0x11 服务的代表性 case 数（至少 1 条）
-- **总数 = Npos + Nneg_sf + Nneg_sess**
+必须覆盖**当前域的所有会话 × 所有子功能的完整交叉组合**（含全局不支持的子功能）。
+
+- 对每个 (会话, 子功能) 组合：
+  - 该会话支持该子功能 → 正向 case
+  - 该会话不支持该子功能，但子功能全局存在 → 负向 case（NRC 0x7E）
+  - 子功能全局不支持（Support=N）→ 也生成负向 case（NRC 0x12）
+- **总数 = 可达会话数 × 子功能总数（含全局不支持的）**
 
 #### 用例命名规则
 
@@ -100,8 +119,14 @@
 
 #### 用例数量规则
 
-- 与 Session Layer 中支持 SPRMIB 的 case 数相同
-- 仅对 `SPRMIB = Y` 的子功能生成
+必须覆盖**所有会话 × 所有子功能的 SPRMIB 变体**（含 SPRMIB=N 和全局不支持的子功能）。
+
+- 子功能支持 + SPRMIB=Y + 正向成功 → No_Response
+- 子功能支持 + SPRMIB=N → 按原子子功能处理，正常返回响应或 NRC
+- 子功能不支持（全局）→ NRC 0x12
+- 会话不支持该子功能 → NRC 0x7E
+
+**总数 = Session Layer 用例数**（一一对应）
 
 #### 用例命名规则
 
@@ -152,7 +177,7 @@
 - `Nsecure11` = 需要先解锁才允许执行的 0x11 支持子功能数
 - 从参数表 `Access Level` 字段读取安全等级
 - **总数 = Nsecure11**
-- 若该软件域下 0x11 无安全限制，则不生成本类 case
+- **始终生成**：即使参数表显示无安全限制（Level0），也要生成用例验证锁定状态下服务可用性
 
 #### 用例命名规则
 
@@ -297,9 +322,10 @@
 
 #### 用例数量规则
 
-**推荐固定 2 条：**
-1. 在当前会话不支持 0x11 的语义下做 1 条（Default 会话，NRC 0x7E）
-2. 在当前会话支持 0x11、但遍历到非法子功能的语义下做 1 条（Extended 会话，NRC 0x12）
+**固定 3 条**，覆盖所有可达会话：
+1. Default Session — 遍历非法子功能
+2. Programming Session — 遍历非法子功能
+3. Extended Session — 遍历非法子功能
 
 #### 用例命名规则
 
@@ -397,7 +423,39 @@ Send DiagBy[Physical]Data[11 <RepSub>]WithLen[1];
 
 ---
 
-### 分类 7: Functional Addressing Test（客户扩展）
+### 分类 7: NRC Priority Test
+
+#### 用例数量规则
+
+**仅 Physical 寻址生成，固定 1 条**。
+
+#### 用例命名规则
+
+`NRC <优先级链>`
+
+示例：`NRC 13>12>22`
+
+#### 测试步骤模板
+
+```
+1. 进入支持 0x11 的会话（如 Extended）
+2. Send DiagBy[Physical]Data[11 <RepSub>]WithLen[1];
+3. Delay[2000]ms;
+```
+
+#### Check 规则
+
+- `Check DiagData[7F 11 13]Within[50]ms;`
+- NRC 优先级链从参数表读取（如 `13>12>22`），验证最高优先级 NRC
+
+#### 特殊规则
+
+1. NRC Priority 仅在 Physical 寻址下生成，Functional 不需要
+2. 使用 WithLen 制造长度错误来触发 NRC 0x13
+
+---
+
+### 分类 8: Functional Addressing Test（客户扩展）
 
 #### 用例数量规则
 
@@ -452,11 +510,14 @@ Send DiagBy[Physical]Data[11 <RepSub>]WithLen[1];
 ## 功能寻址用例生成规则
 
 当 `Functional Request = 支持` 时：
-1. 将所有 Physical 用例复制一份
+1. 将所有 Physical 用例复制一份（Session Layer + SPRMIB + Secure Access + Reset Effect + Traversal + Incorrect Diag Command）
 2. 发送函数中 `[Physical]` 改为 `[Function]`
 3. Case ID 中 `Phy` 改为 `Fun`，编号重新从 001 开始
 4. 安全访问步骤（0x27 seed/key）仍使用 Physical
 5. 复位后验证步骤仍使用 Physical
+6. **Functional 寻址下正向 0x11 hardReset 预期为 `No_Response`**
+7. **Functional 寻址下不支持的子功能预期为 `No_Response Within[1000]ms;`**（不返回 NRC）
+8. 不生成 NRC Priority Test（仅 Physical）
 
 当 `Functional Request = 不支持` 时：
 - 仅生成分类 7（Functional Addressing Test）的 3 条锁定行为验证用例
@@ -470,6 +531,8 @@ Send DiagBy[Physical]Data[11 <RepSub>]WithLen[1];
 2. 从参数表 BootLoader 部分读取 Access Level
 3. 用例命名和分类标题加 Boot 标识：`--Boot Session`
 4. 规则与 App 相同，仅参数来源不同
+5. **Boot 域也必须生成 Functional 用例**（当 Functional=Y 时）
+6. Boot 域安全访问使用对应的 Seed/Key（通常是 27 11/27 12 即 LevelFBL）
 
 ---
 
@@ -481,8 +544,28 @@ Send DiagBy[Physical]Data[11 <RepSub>]WithLen[1];
    - `Delay[...]ms` 不写 Check
    - 带 `AndCheckResp[...]` 的发送函数不单独写 Check
    - `Check MsgInexist[...]` / `Check MsgExist[...]` 本身就是检查，不再重复
-4. **NRC 测试只需执行一次**，在默认会话下即可
-5. **步骤和 Check 的编号必须对应**
-6. **不可省略任何分类**，7 类必须全部生成（条件不满足的标明"无符合条件的用例"）
-7. **xx 表示参数表中对应的十六进制值**，需要根据参数表实际值替换
-8. **输出格式严格按照 Case ID / Case名称 / 测试步骤 / 预期输出 的固定模板**
+4. **步骤和 Check 的编号必须对应**
+5. **不可省略任何分类**，所有分类必须全部生成（条件不满足的标明"无符合条件的用例"）
+6. **输出格式严格为 pipe table**，列顺序：`| Case ID | Case名称 | 测试步骤 | 预期输出 |`
+7. **步骤中换行使用 `<br>` 标记**，不用 `\n`
+8. **NRC 优先级链从参数表精确读取**，不要猜测
+9. **不要生成任何"参数提取结果"或"分析"段落**，直接输出测试用例表格
+10. **进入 Programming 会话前必须先执行 RoutineControl**（如 `31 01 02 03`），否则 ECU 可能拒绝进入 Programming
+
+## Timing 参数提取规则
+
+从参数表精确提取：
+- P2 Server Max → 直接读取 ms 值，hex 编码公式：`P2ms / 1` → 转为 2 字节 hex
+- P2* Server Max → hex 编码公式：`P2*ms / 10` → 转为 2 字节 hex
+- 示例：P2=50ms → 50=0x0032 → `00 32`；P2*=5000ms → 500=0x01F4 → `01 F4`
+- **正响应 Timing Bytes 用于 0x10 Session 切换响应**（`50 <Sub> 00 32 01 F4`），不直接用于 0x11 正响应
+
+## 会话进入标准路径
+
+| 目标会话 | 标准进入步骤 |
+|---------|------------|
+| Default（0x01） | `Send DiagBy[Physical]Data[10 01];` |
+| Extended（0x03） | `Send DiagBy[Physical]Data[10 01];` → `Delay[1000]ms;` → `Send DiagBy[Physical]Data[10 03];` |
+| Programming（0x02） | `Send DiagBy[Physical]Data[10 01];` → `Delay[1000]ms;` → `Send DiagBy[Physical]Data[10 03];` → `Send DiagBy[Physical]Data[31 01 02 03];` → `Send DiagBy[Physical]Data[10 02];` |
+
+**重要**：进入 Programming 会话前必须先执行 RoutineControl（如 `31 01 02 03`）。

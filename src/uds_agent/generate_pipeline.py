@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from pathlib import Path
 
 from .llm_client import LLMClient, LLMResponse
 from .pipeline import ExtractionOutput, UDSExtractionPipeline
@@ -18,6 +19,8 @@ from .test_parser import parse_summary, parse_test_cases
 from .test_schemas import ServiceTestResult
 
 logger = logging.getLogger("generate_pipeline")
+
+_LOG_DIR = Path(__file__).parent.parent.parent / "logs"
 
 
 def _build_diagnostics(
@@ -131,7 +134,13 @@ class UDSGeneratePipeline:
                 },
             )
 
-        # 5. 解析输出
+        # 5. 保存 LLM 原始输出（调试用）
+        _LOG_DIR.mkdir(exist_ok=True)
+        _raw_log = _LOG_DIR / f"llm_raw_{service_id}_{int(time.time())}.md"
+        _raw_log.write_text(llm_response.content, encoding="utf-8")
+        logger.info(f"[{service_id}] LLM 原始输出已保存: {_raw_log}")
+
+        # 6. 解析输出
         test_cases = parse_test_cases(llm_response.content, service_id)
         summary = parse_summary(llm_response.content)
 

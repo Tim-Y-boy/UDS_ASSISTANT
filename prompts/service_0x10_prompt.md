@@ -59,7 +59,38 @@
 
 ---
 
-## 0.2 输出格式通用规则
+## 0.2 整体结构要求
+
+每个软件域（App / Boot）每种寻址方式（Physical / Functional）必须独立生成完整用例集。
+
+生成顺序：
+1. **App Physical** — 标题 `1.Application Service_Physical Addressing`
+2. **App Functional** — 标题 `2.Application Service_Functional Addressing`（仅当 Functional=Y）
+3. **Boot Physical** — 标题 `3.Boot Service_Physical Addressing`
+4. **Boot Functional** — 标题 `4.Boot Service_Functional Addressing`（仅当 Functional=Y）
+
+每组内部按固定顺序包含 8 类测试。每组 Case ID 独立递增（Phy 从 001 开始，Fun 从 001 开始）。
+
+---
+
+## 0.2.1 输出格式要求
+
+1. **输出格式严格为 pipe table**，列顺序：`| Case ID | Case名称 | 测试步骤 | 预期输出 |`
+2. **步骤中换行使用 `<br>` 标记**，不用 `\n`
+3. **不要生成任何"参数提取结果"或"分析"段落**，直接输出测试用例表格
+4. **NRC 优先级链从参数表精确读取**，不要猜测
+
+## 0.2.2 Timing 参数提取规则
+
+从参数表精确提取：
+- P2 Server Max → 直接读取 ms 值，hex 编码公式：`P2ms / 1` → 转为 2 字节 hex
+- P2* Server Max → hex 编码公式：`P2*ms / 10` → 转为 2 字节 hex
+- 示例：P2=50ms → 50=0x0032 → `00 32`；P2*=5000ms → 500=0x01F4 → `01 F4`
+- 0x10 正响应格式：`50 <Sub> <P2_H> <P2_L> <P2*_H> <P2*_L>`
+
+---
+
+## 0.2.3 输出格式通用规则
 
 ### 0.2.1 Case ID 规则
 
@@ -157,9 +188,10 @@
 
 - 进入 Default：`10 01`
 - 进入 Extended：`10 01 -> Delay[1000]ms -> 10 03`
-- 进入 Programming：`10 01 -> Delay[1000]ms -> 10 03 -> 10 02`
+- 进入 Programming：`10 01 -> Delay[1000]ms -> 10 03 -> 31 01 02 03 -> 10 02`
 
-> 说明：这不是 ISO 唯一允许路径，沉淀出来的“标准建链路径”，便于统一生成。
+> **重要**：进入 Programming 会话前必须先执行 RoutineControl（如 `31 01 02 03`），否则 ECU 可能拒绝进入 Programming。
+> 说明：这不是 ISO 唯一允许路径，沉淀出来的”标准建链路径”，便于统一生成。
 
 ### 0.3.5 安全访问解锁的标准写法
 
@@ -278,11 +310,12 @@
   `2.Delay[1000]ms;`  
   `3.Send DiagBy[<Addr>]Data[10 03];`
 
-- Current = Programming  
-  `1.Send DiagBy[<Addr>]Data[10 01];`  
-  `2.Delay[1000]ms;`  
-  `3.Send DiagBy[<Addr>]Data[10 03];`  
-  `4.Send DiagBy[<Addr>]Data[10 02];`
+- Current = Programming
+  `1.Send DiagBy[<Addr>]Data[10 01];`
+  `2.Delay[1000]ms;`
+  `3.Send DiagBy[<Addr>]Data[10 03];`
+  `4.Send DiagBy[<Addr>]Data[31 01 02 03];`
+  `5.Send DiagBy[<Addr>]Data[10 02];`
 
 然后再发：
 
@@ -685,3 +718,14 @@
 
 > **注意**：0x11 (ECUReset) 的规则已迁移至独立文件 `prompts/service_0x11_prompt.md`。
 > 本文件仅包含 0x10 (DiagnosticSessionControl) 的规则。
+
+---
+
+## 生成注意事项
+
+1. **不可省略任何分类**，8 类必须全部生成（条件不满足的标明"无符合条件的用例"）
+2. **Boot 域也必须生成 Functional 用例**（当 Functional=Y 时）
+3. **不要生成任何"参数提取结果"或"分析"段落**，直接输出测试用例表格
+4. **输出格式严格为 pipe table**，列顺序：`| Case ID | Case名称 | 测试步骤 | 预期输出 |`
+5. **步骤中换行使用 `<br>` 标记**，不用 `\n`
+6. **NRC 优先级链从参数表精确读取**，不要猜测
