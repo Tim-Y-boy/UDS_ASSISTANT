@@ -5,10 +5,26 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
 
 from ..excel_framework import ExcelReader, SheetTextConverter
 
 logger = logging.getLogger("pipeline")
+
+# Excel 文本输出目录
+_DUMP_DIR = Path(__file__).parent.parent.parent / "logs" / "excel_text"
+
+
+def _dump_excel_text(excel_path: str, service_id: str, text: str) -> None:
+    if not text:
+        return
+    _DUMP_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = Path(excel_path).stem
+    out_path = _DUMP_DIR / f"{timestamp}_{filename}_{service_id}.txt"
+    out_path.write_text(text, encoding="utf-8")
+    logger.info(f"Excel 文本已写入: {out_path}")
 
 
 @dataclass
@@ -33,6 +49,7 @@ class UDSExtractionPipeline:
         excel_path: str,
         service_id: str = "",
         software_domain: str = "App",
+        original_filename: str = "",
     ) -> ExtractionOutput:
         """读取 Excel 并转换为文本。"""
         start = time.time()
@@ -58,9 +75,14 @@ class UDSExtractionPipeline:
         filtered_names = converter.filter_relevant_sheets(all_names)
         excel_text = converter.convert_workbook(sheets, filter_sheets=True)
 
-        return ExtractionOutput(
+        output = ExtractionOutput(
             excel_text=excel_text,
             elapsed_seconds=time.time() - start,
             excel_text_length=len(excel_text),
             sheets_filtered=filtered_names,
         )
+
+        # 将解析出的文本写入文件
+        _dump_excel_text(original_filename or excel_path, service_id, excel_text)
+
+        return output

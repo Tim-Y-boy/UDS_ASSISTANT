@@ -55,6 +55,7 @@ class UDSGeneratePipeline:
         excel_path: str,
         service_id: str,
         domain: str = "App",
+        original_filename: str = "",
     ) -> ServiceTestResult:
         """执行完整的生成管道。"""
         start = time.time()
@@ -65,6 +66,7 @@ class UDSGeneratePipeline:
             excel_path=excel_path,
             service_id=service_id,
             software_domain=domain,
+            original_filename=original_filename,
         )
 
         if extraction.errors:
