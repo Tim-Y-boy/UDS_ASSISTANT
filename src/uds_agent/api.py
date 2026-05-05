@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 import json
 import logging
@@ -536,7 +537,7 @@ async def generate_test_cases(
         for sid in service_ids:
             normalized = _normalize_sid(sid)
             try:
-                result = pipeline.generate(excel_path=tmp_path, service_id=normalized, domain=domain, original_filename=file.filename or "")
+                result = await asyncio.to_thread(pipeline.generate, excel_path=tmp_path, service_id=normalized, domain=domain, original_filename=file.filename or "")
                 results.append(result)
                 if not ecu_info and result.test_cases:
                     ecu_info = {"provider": result.meta.get("provider", ""), "model": result.meta.get("model", "")}
@@ -598,7 +599,7 @@ async def generate_stream(
             yield f"data: {json.dumps({'type': 'progress', 'index': i, 'total': len(service_ids), 'service_id': sid}, ensure_ascii=False)}\n\n"
 
             try:
-                result = pipeline.generate(excel_path=tmp_path, service_id=sid, domain=domain, original_filename=file.filename or "")
+                result = await asyncio.to_thread(pipeline.generate, excel_path=tmp_path, service_id=sid, domain=domain, original_filename=file.filename or "")
                 yield f"data: {json.dumps({'type': 'service_done', 'data': result.model_dump(), 'elapsed_seconds': round(time.time() - start, 2)}, ensure_ascii=False)}\n\n"
             except Exception as e:
                 logger.error(f"SSE: 服务 {sid} 失败: {e}")
