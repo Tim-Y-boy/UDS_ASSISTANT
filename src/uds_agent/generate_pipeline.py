@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import datetime
 from pathlib import Path
 
 from .llm_client import LLMClient, LLMResponse
@@ -20,7 +21,7 @@ from .test_schemas import ServiceTestResult
 
 logger = logging.getLogger("generate_pipeline")
 
-_LOG_DIR = Path(__file__).parent.parent.parent / "logs"
+_LOG_DIR = Path(__file__).parent.parent.parent / "logs"/ "llm_raw"
 
 
 def _build_diagnostics(
@@ -136,7 +137,9 @@ class UDSGeneratePipeline:
 
         # 5. 保存 LLM 原始输出（调试用）
         _LOG_DIR.mkdir(exist_ok=True)
-        _raw_log = _LOG_DIR / f"llm_raw_{service_id}_{int(time.time())}.md"
+        _ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        _safe_name = original_filename.replace(" ", "_") if original_filename else "unknown"
+        _raw_log = _LOG_DIR / f"{_ts}_{service_id}_{_safe_name}_llm_raw.md"
         _raw_log.write_text(llm_response.content, encoding="utf-8")
         logger.info(f"[{service_id}] LLM 原始输出已保存: {_raw_log}")
 
