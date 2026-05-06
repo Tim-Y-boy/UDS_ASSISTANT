@@ -76,7 +76,7 @@ class UDSGeneratePipeline:
             logger.warning(f"[{service_id}] Excel 读取有错误: {extraction.errors}")
 
         logger.info(
-            f"[{service_id}] Excel 文本长度: {extraction.excel_text_length} 字符"
+            f"[{service_id}] Excel读取完成 文本长度: {extraction.excel_text_length} 字符"
         )
 
         # 2. 加载服务提示词
