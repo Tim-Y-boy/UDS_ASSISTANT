@@ -19,6 +19,7 @@ import io
 import json
 import logging
 import os
+import shutil
 import sys
 import tempfile
 import time
@@ -26,7 +27,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 
 # 将 src/ 加入 Python 路径
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -503,8 +504,9 @@ async def generate_test_cases(
     file: UploadFile = File(...),
     services: str = Form(...),
     domain: str = Form("App"),
+    id: str = Form(...),
 ):
-    """上传 Excel + 选择服务 → 返回测试用例 JSON。"""
+    """异步生成测试用例：校验通过后立即返回，处理完成后回调通知结果。"""
     if not file.filename:
         raise HTTPException(status_code=400, detail="未提供文件名")
 
@@ -522,12 +524,45 @@ async def generate_test_cases(
         if _normalize_sid(sid) not in available:
             raise HTTPException(status_code=400, detail=f"不支持的服务: {sid}")
 
-    start = time.time()
-    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
-        content = await file.read()
-        tmp.write(content)
-        tmp_path = tmp.name
+    callback_url = cfg.get("callback", {}).get("url", "")
+    if not callback_url:
+        raise HTTPException(status_code=500, detail="未配置回调地址（config.yaml → callback.url）")
 
+    # 保存上传文件到固定临时目录
+    upload_dir = Path("uploads")
+    upload_dir.mkdir(exist_ok=True)
+    saved_path = upload_dir / f"{id}{ext}"
+    content = await file.read()
+    saved_path.write_bytes(content)
+
+    # 启动后台任务
+    asyncio.create_task(
+        _process_and_callback(
+            request_id=id,
+            excel_path=str(saved_path),
+            service_ids=service_ids,
+            domain=domain,
+            original_filename=file.filename or "",
+            callback_url=callback_url,
+        )
+    )
+
+    return JSONResponse(
+        status_code=202,
+        content={"id": id, "code": "success", "message": "请求已接收，处理完成后将回调通知"},
+    )
+
+
+async def _process_and_callback(
+    request_id: str,
+    excel_path: str,
+    service_ids: list[str],
+    domain: str,
+    original_filename: str,
+    callback_url: str,
+):
+    """后台处理所有服务并通过回调返回结果。"""
+    start = time.time()
     try:
         pipeline = get_pipeline()
         results = []
@@ -537,16 +572,32 @@ async def generate_test_cases(
         for sid in service_ids:
             normalized = _normalize_sid(sid)
             try:
-                result = await asyncio.to_thread(pipeline.generate, excel_path=tmp_path, service_id=normalized, domain=domain, original_filename=file.filename or "")
+                result = await asyncio.to_thread(
+                    pipeline.generate,
+                    excel_path=excel_path,
+                    service_id=normalized,
+                    domain=domain,
+                    original_filename=original_filename,
+                )
                 results.append(result)
                 if not ecu_info and result.test_cases:
                     ecu_info = {"provider": result.meta.get("provider", ""), "model": result.meta.get("model", "")}
             except Exception as e:
-                logger.error(f"服务 {normalized} 生成失败: {e}")
+                logger.error(f"[{request_id}] 服务 {normalized} 生成失败: {e}")
                 errors.append({"service_id": normalized, "error": str(e)})
 
         elapsed = time.time() - start
-        return {
+
+        if not results and errors:
+            status = "failed"
+        elif errors:
+            status = "partial"
+        else:
+            status = "completed"
+
+        body = {
+            "id": request_id,
+            "status": status,
             "ecu_info": ecu_info,
             "services": [r.model_dump() for r in results],
             "meta": {
@@ -557,8 +608,44 @@ async def generate_test_cases(
                 "total_elapsed_seconds": round(elapsed, 2),
             },
         }
+
+        # 回调通知（JSON + Excel 文件）
+        try:
+            import httpx
+            from datetime import datetime
+
+            xlsx_bytes = export_to_excel(body["services"]) if results else None
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            base_name = Path(original_filename).stem if original_filename else "UDS_TestCases"
+            filename = f"{base_name}_{timestamp}.xlsx"
+
+            # 调试模式：保存 JSON 和 Excel 到本地
+            debug = load_config().get("callback", {}).get("debug", False)
+            if debug:
+                debug_dir = Path("logs/callback")
+                debug_dir.mkdir(parents=True, exist_ok=True)
+                json_path = debug_dir / f"{timestamp}_{request_id}_callback.json"
+                json_path.write_text(json.dumps(body, ensure_ascii=False, indent=2), encoding="utf-8")
+                logger.info(f"[{request_id}] 回调 JSON 已保存: {json_path}")
+                if xlsx_bytes:
+                    xlsx_path = debug_dir / filename
+                    xlsx_path.write_bytes(xlsx_bytes)
+                    logger.info(f"[{request_id}] 回调 Excel 已保存: {xlsx_path}")
+
+            async with httpx.AsyncClient(timeout=30) as client:
+                data = {"data": (None, json.dumps(body, ensure_ascii=False), "application/json")}
+                if xlsx_bytes:
+                    data["file"] = (filename, xlsx_bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                resp = await client.post(callback_url, files=data)
+                logger.info(f"[{request_id}] 回调完成: {resp.status_code}")
+        except Exception as e:
+            logger.error(f"[{request_id}] 回调失败: {e}")
     finally:
-        os.unlink(tmp_path)
+        # 清理上传文件
+        try:
+            os.unlink(excel_path)
+        except OSError:
+            pass
 
 
 @app.post("/api/generate/stream")

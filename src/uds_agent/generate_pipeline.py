@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import time
 from datetime import datetime
 from pathlib import Path
+
+import yaml
 
 from .llm_client import LLMClient, LLMResponse
 from .pipeline import ExtractionOutput, UDSExtractionPipeline
@@ -53,6 +56,24 @@ class UDSGeneratePipeline:
         )
         self._config_path = config_path
         self._gen_config = load_generation_config(config_path)
+        self._cache_cfg = self._load_cache_config()
+
+    def _load_cache_config(self) -> dict:
+        cfg_path = Path(self._config_path)
+        if cfg_path.exists():
+            cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+        else:
+            cfg = {}
+        cache = cfg.get("cache", {})
+        return {
+            "enabled": cache.get("enabled", False),
+            "dir": cache.get("dir", "cache"),
+        }
+
+    @staticmethod
+    def _cache_key(excel_path: str, service_id: str, domain: str, cache_dir: str) -> Path:
+        md5 = hashlib.md5(Path(excel_path).read_bytes()).hexdigest()
+        return Path(cache_dir) / f"{md5}_{service_id}_{domain}.json"
 
     def generate(
         self,
@@ -63,6 +84,17 @@ class UDSGeneratePipeline:
     ) -> ServiceTestResult:
         """执行完整的生成管道。"""
         start = time.time()
+
+        # 缓存检查
+        cache_path = None
+        if self._cache_cfg["enabled"]:
+            cache_path = self._cache_key(excel_path, service_id, domain, self._cache_cfg["dir"])
+            if cache_path.exists():
+                logger.info(f"[{service_id}] cache hit: {cache_path.name}")
+                return ServiceTestResult.model_validate_json(cache_path.read_text(encoding="utf-8"))
+            if cache_path.exists():
+                logger.info(f"[{service_id}] cache hit: {cache_path.name}")
+                return ServiceTestResult.model_validate_json(cache_path.read_text(encoding="utf-8"))
 
         # 1. 读取 Excel 文本
         logger.info(f"[{service_id}] 读取 Excel 文本...")
@@ -167,7 +199,7 @@ class UDSGeneratePipeline:
         sid_key = service_id.lower()
         service_name = SERVICE_NAMES.get(sid_key, "")
 
-        return ServiceTestResult(
+        result = ServiceTestResult(
             service_id=service_id,
             service_name=service_name,
             sheet_name=build_sheet_name(service_id),
@@ -182,3 +214,11 @@ class UDSGeneratePipeline:
                 "extraction_diagnostics": _build_diagnostics(extraction, llm_response, elapsed),
             },
         )
+
+        # 写入缓存
+        if cache_path is not None:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            cache_path.write_text(result.model_dump_json(), encoding="utf-8")
+            logger.info(f"[{service_id}] 缓存已写入: {cache_path.name}")
+
+        return result

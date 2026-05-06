@@ -20,8 +20,8 @@ class TestCaseRow(BaseModel):
     precondition: str = "1.Power On;"
     test_procedure: str = ""
     expected_output: str = ""
-    actual_output: str = ""
-    defect_id: str = ""
+    # actual_output: str = ""
+    # defect_id: str = ""
 
 
 class SectionSummary(BaseModel):

@@ -13,7 +13,7 @@ from openpyxl.utils import get_column_letter
 
 # 列宽配置（匹配模板）
 COL_WIDTHS = {
-    "A": 6,   # Sequence Number
+    "A": 12,  # Sequence Number
     "B": 18,  # System Requirement ID
     "C": 18,  # Case ID
     "D": 55,  # Case Name
@@ -94,6 +94,10 @@ def export_to_excel(services_data: list[dict]) -> bytes:
                 _write_section_row(ws, row, subsection)
                 row += 1
 
+            # 无测试用例的子功能只显示标题
+            if tc.get("is_empty_section"):
+                continue
+
             # 写 test case row
             seq += 1
             _write_test_case_row(ws, row, seq, tc)
@@ -107,58 +111,51 @@ def export_to_excel(services_data: list[dict]) -> bytes:
 
 def _write_header(ws):
     """写3行表头，匹配 Het_UDS_TestSpecification 模板。"""
-    # Row 1: B1:C1 = "Test Level", D1:M1 = "SYS.5"
+    _style = lambda c: (
+        setattr(c, 'font', HEADER_FONT) or
+        setattr(c, 'fill', HEADER_FILL) or
+        setattr(c, 'border', THIN_BORDER)
+    )
+
+    # Row 1
     ws["B1"] = "Test Level"
-    ws["B1"].font = HEADER_FONT
-    ws["B1"].fill = HEADER_FILL
-    ws["B1"].alignment = Alignment(horizontal="center")
-    ws["B1"].border = THIN_BORDER
-    ws.merge_cells("B1:C1")
+    _style(ws["B1"])
+    ws["C1"] = "SYS.5"
+    _style(ws["C1"])
 
-    ws["D1"] = "SYS.5"
-    ws["D1"].font = HEADER_FONT
-    ws["D1"].fill = HEADER_FILL
-    ws["D1"].alignment = Alignment(horizontal="center")
-    ws["D1"].border = THIN_BORDER
-    ws.merge_cells("D1:M1")
+    # Row 2 & 3: 合并单元格
+    ws.merge_cells("A2:A3")
+    ws["A2"] = "Sequence Number"
+    _style(ws["A2"]); _style(ws["A3"])
+    ws["A2"].alignment = Alignment(horizontal="center", vertical="center")
 
-    # Row 2: 列标题
-    headers = [
-        "Sequence Number",       # A
-        "System Requirement ID", # B
-        "Test Case",             # C
-        "",                      # D (Name sub-header in row 3)
-        "",                      # E (Priority sub-header in row 3)
-        "",                      # F (Author sub-header in row 3)
-        "Design Method",         # G
-        "Precondition",          # H
-        "Test Procedure",        # I
-        "Expected Output",       # J
-        "Actual Output",         # K
-        "Judgement Result",      # L
-        "Defect ID",             # M
-        "", "", "",              # N-P
-    ]
-    for col, h in enumerate(headers, 1):
-        cell = ws.cell(row=2, column=col, value=h)
-        cell.font = HEADER_FONT
-        cell.fill = HEADER_FILL
-        cell.border = THIN_BORDER
+    ws.merge_cells("B2:B3")
+    ws["B2"] = "System Requirement ID"
+    _style(ws["B2"]); _style(ws["B3"])
+    ws["B2"].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
-    # Row 3: 子标题
-    sub_headers = [
-        "",       # A
-        "",       # B
-        "ID",     # C
-        "Name",   # D
-        "Priority",  # E
-        "Author",    # F
-    ] + [""] * 10  # G-P
-    for col, h in enumerate(sub_headers, 1):
+    ws.merge_cells("C2:F2")
+    ws["C2"] = "Test Case"
+    _style(ws["C2"]); _style(ws["F2"])
+    ws["C2"].alignment = Alignment(horizontal="center", vertical="center")
+
+    # C3-F3 子标题
+    for col, h in [(3, "ID"), (4, "Name"), (5, "Priority"), (6, "Author")]:
         cell = ws.cell(row=3, column=col, value=h)
-        cell.font = HEADER_FONT
-        cell.fill = HEADER_FILL
-        cell.border = THIN_BORDER
+        _style(cell)
+        cell.alignment = Alignment(horizontal="center")
+
+    # G-M: 各列第2、3行合并
+    merge_headers = {
+        7: "Design Method", 8: "Precondition", 9: "Test Procedure",
+        10: "Expected Output", 11: "Actual Output", 12: "Judgement Result", 13: "Defect ID",
+    }
+    for col, title in merge_headers.items():
+        ws.merge_cells(start_row=2, start_column=col, end_row=3, end_column=col)
+        cell = ws.cell(row=2, column=col, value=title)
+        _style(cell)
+        _style(ws.cell(row=3, column=col))
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
 
 def _write_section_row(ws, row, text):
@@ -191,10 +188,15 @@ def _write_test_case_row(ws, row, seq, tc):
     ]
 
     for col, val in enumerate(values, 1):
+        if isinstance(val, str):
+            val = val.replace("<br>", "\n").replace("<br/>", "\n").replace("<BR>", "\n")
         cell = ws.cell(row=row, column=col, value=val)
         cell.font = NORMAL_FONT
         cell.border = THIN_BORDER
-        cell.alignment = WRAP_ALIGN
+        if col == 1:
+            cell.alignment = Alignment(horizontal="center", vertical="top")
+        else:
+            cell.alignment = WRAP_ALIGN
 
 
 def _safe_sheet_name(name: str, max_len: int = 31) -> str:

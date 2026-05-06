@@ -19,6 +19,7 @@ output/
 
 # Logs
 logs/
+cache/
 
 # Lock file (regenerate with `uv lock`)
 uv.lock

@@ -111,18 +111,29 @@ def _is_pipe_table_format(text: str) -> bool:
 
 
 def _parse_pipe_table(text: str) -> tuple[list[dict], dict[str, str]]:
+    """解析 pipe table 格式：# 一级标题 → section，## 二级标题 → subsection。"""
     raw_cases: list[dict] = []
     section_map: dict[str, str] = {}
     current_section = ""
+    current_subsection = ""
 
     for line in text.split("\n"):
         stripped = line.strip()
 
-        # ### header: section
-        if stripped.startswith("### "):
-            header = stripped[4:].strip().strip("*").strip()
-            m = re.match(r"^[\d.]+\s+(.+)$", header)
-            current_section = m.group(1) if m else header
+        # # 一级标题 → section
+        if re.match(r"^# [^#]", stripped):
+            current_section = stripped[2:].strip().strip("*").strip()
+            current_subsection = ""
+            continue
+
+        # ## 二级标题 → subsection
+        if re.match(r"^## [^#]", stripped):
+            current_subsection = stripped[3:].strip().strip("*").strip()
+            continue
+
+        # ### 三级标题 → subsection（兼容）
+        if re.match(r"^### [^#]", stripped):
+            current_subsection = stripped[4:].strip().strip("*").strip()
             continue
 
         # pipe table row with Case ID
@@ -142,9 +153,9 @@ def _parse_pipe_table(text: str) -> tuple[list[dict], dict[str, str]]:
             "test_procedure": cells[2] if len(cells) > 2 else "",
             "expected_output": cells[3] if len(cells) > 3 else "",
             "section_name": current_section,
-            "is_boot": "boot" in current_section.lower(),
+            "subsection_name": current_subsection,
         })
-        section_map[first_cell] = current_section
+        section_map[first_cell] = current_subsection
 
     return raw_cases, section_map
 
@@ -158,6 +169,7 @@ def _parse_markdown(text: str) -> tuple[list[dict], dict[str, str]]:
     section_map: dict[str, str] = {}
 
     current_section = ""
+    current_subsection = ""
     current_case_name = ""
     current_case_id = ""
     current_steps: list[str] = []
@@ -169,7 +181,6 @@ def _parse_markdown(text: str) -> tuple[list[dict], dict[str, str]]:
         nonlocal current_case_id, current_case_name, current_steps, current_expected
         nonlocal in_steps, in_expected
         if current_case_id and RE_CASE_ID.search(current_case_id):
-            # If no expected output, extract Check lines from steps
             steps_final = current_steps
             expected_final = current_expected
             if not expected_final:
@@ -181,9 +192,9 @@ def _parse_markdown(text: str) -> tuple[list[dict], dict[str, str]]:
                 "test_procedure": "\n".join(steps_final),
                 "expected_output": "\n".join(expected_final),
                 "section_name": current_section,
-                "is_boot": "boot" in current_section.lower(),
+                "subsection_name": current_subsection,
             })
-            section_map[current_case_id.strip()] = current_section
+            section_map[current_case_id.strip()] = current_subsection
         current_case_id = ""
         current_case_name = ""
         current_steps = []
@@ -194,7 +205,19 @@ def _parse_markdown(text: str) -> tuple[list[dict], dict[str, str]]:
     for line in text.split("\n"):
         stripped = line.strip()
 
-        # ### header: section or "Case N:"
+        # # 一级标题 → section
+        if re.match(r"^# [^#]", stripped):
+            current_section = stripped[2:].strip().strip("*").strip()
+            current_subsection = ""
+            continue
+
+        # ## 二级标题 → subsection
+        if re.match(r"^## [^#]", stripped):
+            flush()
+            current_subsection = stripped[3:].strip().strip("*").strip()
+            continue
+
+        # ### header: subsection or "Case N:"
         if stripped.startswith("### "):
             header = stripped[4:].strip().strip("*").strip()
             if re.match(r"Case\s+\d+", header, re.IGNORECASE):
@@ -203,8 +226,7 @@ def _parse_markdown(text: str) -> tuple[list[dict], dict[str, str]]:
                 current_case_name = m.group(1).strip() if m else header
             else:
                 flush()
-                m = re.match(r"^[\d.]+\s+(.+)$", header)
-                current_section = m.group(1) if m else header
+                current_subsection = header
             continue
 
         # #### header: case name
@@ -326,10 +348,9 @@ def _parse_colon(text: str) -> tuple[list[dict], dict[str, str]]:
     section_map: dict[str, str] = {}
 
     for section_name, block in sections:
-        is_boot = "boot" in section_name.lower()
         for case in _parse_colon_cases(block):
             case["section_name"] = section_name
-            case["is_boot"] = is_boot
+            case["subsection_name"] = section_name
             raw_cases.append(case)
             if case.get("case_id"):
                 section_map[case["case_id"]] = section_name
@@ -381,7 +402,7 @@ def _extract_colon_steps(text: str, marker: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Section assignment
+# Section assignment — 直接映射 LLM 层级，不重新分组编号
 # ---------------------------------------------------------------------------
 
 def _assign_sections(
@@ -392,66 +413,21 @@ def _assign_sections(
     if not raw_cases:
         return []
 
-    ORDER = ["Application_Physical", "Application_Functional", "Bootloader_Physical", "Bootloader_Functional"]
-    grouped: dict[str, list[tuple[int, dict]]] = {k: [] for k in ORDER}
-
-    for idx, raw in enumerate(raw_cases):
-        case_id = raw.get("case_id", "")
-        case_name = raw.get("case_name", "")
-        section_name = raw.get("section_name", "")
-
-        is_boot = raw.get("is_boot", False) or "boot" in section_name.lower() or "boot" in case_name.lower()
-
-        m = RE_CASE_ID.search(case_id)
-        addr = m.group(2) if m else "Phy"
-        domain = "Bootloader" if is_boot else "Application"
-        addr_label = "Physical" if addr == "Phy" else "Functional"
-        key = f"{domain}_{addr_label}"
-        if key not in grouped:
-            key = "Application_Physical"
-        grouped[key].append((idx, raw))
-
-    # Assign section numbers
-    sec_nums: dict[str, int] = {}
-    n = 1
-    for k in ORDER:
-        if grouped[k]:
-            sec_nums[k] = n
-            n += 1
-
-    # Assign subsection numbers per group
-    sub_nums: dict[str, dict[str, int]] = {k: {} for k in ORDER}
-
     cases: list[TestCaseRow] = []
     seq = 1
 
-    for gk in ORDER:
-        if not grouped[gk]:
-            continue
-        sn = sec_nums[gk]
-        domain = gk.split("_")[0]
-        addr = gk.split("_")[1]
-        addr_text = "Physical" if addr == "Physical" else "Functional"
-        sec_title = f"{sn}.{domain} Service_{addr_text} Addressing"
-
-        for _, raw in grouped[gk]:
-            sname = raw.get("section_name", "")
-            if sname not in sub_nums[gk]:
-                sub_nums[gk][sname] = len(sub_nums[gk]) + 1
-            sub_sn = sub_nums[gk][sname]
-            sub_title = f"{sn}.{sub_sn} {sname}"
-
-            cases.append(TestCaseRow(
-                section=sec_title,
-                subsection=sub_title,
-                sequence_number=seq,
-                case_id=raw.get("case_id", ""),
-                case_name=raw.get("case_name", ""),
-                priority=_infer_priority(raw.get("case_name", "")),
-                test_procedure=raw.get("test_procedure", ""),
-                expected_output=raw.get("expected_output", ""),
-            ))
-            seq += 1
+    for raw in raw_cases:
+        cases.append(TestCaseRow(
+            section=raw.get("section_name", ""),
+            subsection=raw.get("subsection_name", ""),
+            sequence_number=seq,
+            case_id=raw.get("case_id", ""),
+            case_name=raw.get("case_name", ""),
+            priority=_infer_priority(raw.get("case_name", "")),
+            test_procedure=raw.get("test_procedure", ""),
+            expected_output=raw.get("expected_output", ""),
+        ))
+        seq += 1
 
     return cases
 
