@@ -1,0 +1,11 @@
+services:
+  uds-assistant:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./config.yaml:/uds-assistant/config.yaml
+      - /data/uds-assistant/logs:/uds-assistant/logs
+      - /data/uds-assistant/cache:/uds-assistant/cache
+      - /data/uds-assistant/uploads:/uds-assistant/uploads
+    restart: always
