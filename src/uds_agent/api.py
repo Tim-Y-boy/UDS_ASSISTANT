@@ -505,6 +505,8 @@ async def generate_test_cases(
     services: str = Form(...),
     domain: str = Form("App"),
     id: str = Form(...),
+    username: str = Form(...),
+    real_name: str = Form(...),
 ):
     """异步生成测试用例：校验通过后立即返回，处理完成后回调通知结果。"""
     if not file.filename:
@@ -535,6 +537,8 @@ async def generate_test_cases(
     content = await file.read()
     saved_path.write_bytes(content)
 
+    author = f"{real_name}-{username}"
+
     # 启动后台任务
     asyncio.create_task(
         _process_and_callback(
@@ -544,6 +548,7 @@ async def generate_test_cases(
             domain=domain,
             original_filename=file.filename or "",
             callback_url=callback_url,
+            author=author,
         )
     )
 
@@ -560,6 +565,7 @@ async def _process_and_callback(
     domain: str,
     original_filename: str,
     callback_url: str,
+    author: str = "",
 ):
     """后台处理所有服务并通过回调返回结果。"""
     start = time.time()
@@ -578,6 +584,7 @@ async def _process_and_callback(
                     service_id=normalized,
                     domain=domain,
                     original_filename=original_filename,
+                    author=author,
                 )
                 results.append(result)
                 if not ecu_info and result.test_cases:

@@ -81,6 +81,7 @@ class UDSGeneratePipeline:
         service_id: str,
         domain: str = "App",
         original_filename: str = "",
+        author: str = "",
     ) -> ServiceTestResult:
         """执行完整的生成管道。"""
         start = time.time()
@@ -180,7 +181,7 @@ class UDSGeneratePipeline:
         summary = parse_summary(llm_response.content)
 
         # 6. 填充配置字段
-        author = self._gen_config.get("author", "")
+        author = author or self._gen_config.get("author", "")
         design_method = self._gen_config.get("design_method", "")
         precondition = self._gen_config.get("precondition", "")
         sys_req_id = self._gen_config.get("system_requirement_id", "")

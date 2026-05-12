@@ -2,7 +2,7 @@
 
 ## 1. 生成接口
 
-### POST /api/generate
+### POST http://10.12.164.19:8000/api/generate
 
 异步生成测试用例。校验通过后立即返回，后台处理完成后通过回调接口通知结果。
 
@@ -15,6 +15,8 @@
 | `file` | MultipartFile | 是 | ECU 诊断参数 Excel 文件（.xlsx / .xls） |
 | `services` | String | 是 | 逗号分隔的服务 ID，如 `0x10,0x11` |
 | `id` | String | 是 | 请求标识，由调用方传入，回调时原样返回 |
+| `username` | String | 是 | 工号，如 `E12345` |
+| `realName` | String | 是 | 用户姓名，如 `张三` |
 
 #### 响应（HTTP 202）
 
@@ -45,6 +47,8 @@ body.add("file", new FileSystemResource(new File("data.xlsx")));
 body.add("services", "0x10,0x11");
 body.add("domain", "App");
 body.add("id", "test-001");
+body.add("username", "E12345");
+body.add("realName", "张三");
 
 HttpEntity<MultiValueMap<String, Object>> request = new HttpEntity<>(body, headers);
 ResponseEntity<String> response = restTemplate.postForEntity(
