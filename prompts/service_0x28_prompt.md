@@ -35,7 +35,7 @@
 - APP 域使用 ApplicationServices 表的 0x28 服务行
 - Boot 域使用 BootServices 表的 0x28 服务行
 - 若 Boot 域不支持 0x28，仍需生成负向用例（Boot 所有测试预期 7F 28 7F）
-- 两个域的用例集之间用注释行分隔，Boot 域用例编号接续 APP 域
+- 两个域的用例集之间用 `---` 分隔，Boot 域用例编号接续 APP 域
 
 ## 寻址规则
 
@@ -48,7 +48,7 @@
 
 ## 生成分类（共 9 类）
 
-按以下固定顺序逐类生成，每个分类之间用 `--service ID 0x28 <分类名>` 分隔。
+按以下固定顺序逐类生成，每个分类使用 `## N.N` 作为标题（如 `## 1.1 Session Layer Test`）。
 
 ---
 
@@ -521,7 +521,12 @@ Send DiagBy[Physical]Data[28 03 01]WithLen[2];
    - 带 `AndCheckResp[...]` 的发送函数不单独写 Check
 4. **禁用后必须验证 MsgInexist**，恢复后必须验证 MsgExist
 5. **被控报文 ID 从参数表读取**（MonitoredMsgId，如 0x1B），不写死
-6. **输出格式严格按照 Case ID / Case名称 / 测试步骤 / 预期输出 的固定模板**
+6. **输出格式严格为 pipe table**，列顺序：`| Case ID | Case名称 | 测试步骤 | 预期输出 |`
+7. **顶级标题使用 `#`**：如 `# 1. Application Service_Physical Addressing`、`# 2. Application Service_Functional Addressing` 等
+8. **分类标题使用 `##`**：如 `## 1.1 Session Layer Test` 等
+9. **各大组之间用 `---` 分隔**
+10. **无符合条件的用例时使用 `>` 引用**
+11. **步骤中换行使用 `<br>` 标记**，不用 `\n`
 
 ---
 

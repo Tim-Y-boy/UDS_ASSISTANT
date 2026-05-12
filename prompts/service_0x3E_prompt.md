@@ -32,7 +32,7 @@
 - **必须为 APP 和 Boot 两个软件域各独立生成完整用例集**
 - APP 域使用 ApplicationServices 表的 0x3E 服务行
 - Boot 域使用 BootServices 表的 0x3E 服务行
-- 两个域的用例集之间用注释行分隔，Boot 域用例编号接续 APP 域
+- 两个域的用例集之间用 `---` 分隔，Boot 域用例编号接续 APP 域
 
 ## 寻址规则
 
@@ -45,7 +45,7 @@
 
 ## 生成分类（共 9 类）
 
-按以下固定顺序逐类生成，每个分类之间用 `--service ID 0x3E <分类名>` 分隔。
+按以下固定顺序逐类生成，每个分类使用 `## N.N` 作为标题（如 `## 1.1 Session Layer Test`）。
 
 ---
 
@@ -494,7 +494,12 @@ Boot 域按以下顺序生成，每个子分类与 APP 域结构相同：
 6. **Boot 域使用 `31 01 FF 01` 验证会话状态**：正响应=71 01 FF 01 00，负响应=7F 31 31
 7. **Boot 域安全等级为 LevelFBL（27 11/27 12）**，不同于 APP 域的 L1（27 01/27 02）
 8. **SPRMIB (3E 80) 无响应但仍刷新 S3**
-9. **输出格式严格按照 Case ID / Case名称 / 测试步骤 / 预期输出 的固定模板**
+9. **输出格式严格为 pipe table**，列顺序：`| Case ID | Case名称 | 测试步骤 | 预期输出 |`
+10. **顶级标题使用 `#`**：如 `# 1. Application Service_Physical Addressing`、`# 2. Application Service_Functional Addressing` 等
+11. **分类标题使用 `##`**：如 `## 1.1 Session Layer Test` 等
+12. **各大组之间用 `---` 分隔**
+13. **无符合条件的用例时使用 `>` 引用**
+14. **步骤中换行使用 `<br>` 标记**，不用 `\n`
 
 ---
 

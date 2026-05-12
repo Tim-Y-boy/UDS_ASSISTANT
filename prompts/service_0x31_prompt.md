@@ -35,7 +35,7 @@
 
 ## 生成分类（共 5 类）
 
-按以下固定顺序逐类生成，每个分类之间用 `--service ID 0x31 <分类名>` 分隔。
+按以下固定顺序逐类生成，每个分类使用 `## N.N` 作为标题（如 `## 1.1 Session Layer Test`）。
 
 ---
 
@@ -319,4 +319,9 @@ Send DiagBy[Physical]Data[31 01 <RID_H>]WithLen[3];
 5. **OptionData 从 RID 的 Request 参数定义读取**，StartRoutine 通常需要
 6. **StatusByte 含义从 RID 的 Response 参数定义读取**
 7. **有前置条件的 RID 必须生成 Condition Test**
-8. **输出格式严格按照 Case ID / Case名称 / 测试步骤 / 预期输出 的固定模板**
+8. **输出格式严格为 pipe table**，列顺序：`| Case ID | Case名称 | 测试步骤 | 预期输出 |`
+9. **顶级标题使用 `#`**：如 `# 1. Application Service_Physical Addressing`、`# 2. Application Service_Functional Addressing` 等
+10. **分类标题使用 `##`**：如 `## 1.1 Session Layer Test` 等
+11. **各大组之间用 `---` 分隔**
+12. **无符合条件的用例时使用 `>` 引用**
+13. **步骤中换行使用 `<br>` 标记**，不用 `\n`

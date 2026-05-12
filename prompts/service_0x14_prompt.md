@@ -29,7 +29,7 @@
 
 ## 整体结构要求
 
-按以下固定顺序生成 4 组用例，每组之间用空行分隔：
+按以下固定顺序生成 4 组用例，每组使用 `#` 顶级标题（如 `# 1. Application Service_Physical Addressing`），组间用 `---` 分隔：
 
 1. **Application Service_Physical Addressing** — 分类 1-5
 2. **Application Service_Functional Addressing** — 分类 1-5 的 Functional 版本
@@ -38,15 +38,19 @@
 
 ### 输出格式要求
 
-- 使用 pipe table 格式：`| Case ID | Case名称 | 测试步骤 | 预期输出 |`
-- 多行步骤使用 `<br>` 换行
-- 不要输出分析前言或参数提取摘要，直接输出测试用例
+1. **顶级标题使用 `#`**：如 `# 1. Application Service_Physical Addressing`、`# 2. Application Service_Functional Addressing`、`# 3. Boot Service_Physical Addressing`、`# 4. Boot Service_Functional Addressing`
+2. **分类标题使用 `##`**：如 `## 1.1 Session Layer Test`、`## 1.2 Secure Access Test`、`## 1.3 Clear DTC Function Test` 等
+3. **各大组之间用 `---` 分隔**
+4. **无符合条件的用例时使用 `>` 引用**：如 `> App 域无符合条件的用例。`
+5. **输出格式严格为 pipe table**，列顺序：`| Case ID | Case名称 | 测试步骤 | 预期输出 |`
+6. **步骤中换行使用 `<br>` 标记**，不用 `\n`
+7. **不要生成任何"参数提取结果"或"分析"段落**，直接输出测试用例表格
 
 ---
 
 ## 生成分类（共 5 类）
 
-按以下固定顺序逐类生成，每个分类之间用 `--service ID 0x14 <分类名>` 分隔。
+按以下固定顺序逐类生成，每个分类使用 `## N.N` 作为标题（如 `## 1.1 Session Layer Test`）。
 
 ---
 

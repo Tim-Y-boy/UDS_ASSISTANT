@@ -37,7 +37,7 @@
 3. **Boot Physical** — 标题 `3.Boot Service_Physical Addressing`
 4. **Boot Functional** — 标题 `4.Boot Service_Functional Addressing`（仅当 Functional=Y）
 
-每组内部包含以下分类（按顺序），分类之间用 `--service ID 0x11 <分类名>` 分隔：
+每组内部包含以下分类（按顺序），每个分类使用 `## N.N` 作为标题（如 `## 1.1 Session Layer Test`）：
 1. Session Layer Test
 2. SPRMIB Test
 3. Secure Access Test（即使无安全限制也必须生成验证用例）
@@ -46,6 +46,16 @@
 6. Incorrect Diagnostic Command Test
 7. NRC Priority Test（仅 Physical 寻址需要）
 8. Functional Addressing Test（仅当 Functional 不支持时）
+
+### 输出格式要求
+
+1. **顶级标题使用 `#`**：如 `# 1. Application Service_Physical Addressing`、`# 2. Application Service_Functional Addressing`、`# 3. Boot Service_Physical Addressing`、`# 4. Boot Service_Functional Addressing`
+2. **分类标题使用 `##`**：如 `## 1.1 Session Layer Test`、`## 1.2 SPRMIB Test`、`## 1.3 Secure Access Test` 等
+3. **各大组之间用 `---` 分隔**
+4. **无符合条件的用例时使用 `>` 引用**：如 `> App 域 0x11 所有子功能... 无符合条件的用例。`
+5. **输出格式严格为 pipe table**，列顺序：`| Case ID | Case名称 | 测试步骤 | 预期输出 |`
+6. **步骤中换行使用 `<br>` 标记**，不用 `\n`
+7. **不要生成任何"参数提取结果"或"分析"段落**，直接输出测试用例表格
 
 ---
 

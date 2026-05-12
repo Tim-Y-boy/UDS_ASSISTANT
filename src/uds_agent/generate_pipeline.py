@@ -180,7 +180,7 @@ class UDSGeneratePipeline:
         test_cases = parse_test_cases(llm_response.content, service_id)
         summary = parse_summary(llm_response.content)
 
-        # 6. 填充配置字段
+        # 7. 填充配置字段
         author = author or self._gen_config.get("author", "")
         design_method = self._gen_config.get("design_method", "")
         precondition = self._gen_config.get("precondition", "")
@@ -216,7 +216,7 @@ class UDSGeneratePipeline:
             },
         )
 
-        # 写入缓存
+        # 8. 写入缓存
         if cache_path is not None:
             cache_path.parent.mkdir(parents=True, exist_ok=True)
             cache_path.write_text(result.model_dump_json(), encoding="utf-8")

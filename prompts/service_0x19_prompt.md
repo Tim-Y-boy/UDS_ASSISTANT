@@ -32,7 +32,7 @@
 
 ## 生成分类（共 7 类）
 
-按以下固定顺序逐类生成，每个分类之间用 `--service ID 0x19 <分类名>` 分隔。
+按以下固定顺序逐类生成，每个分类使用 `## N.N` 作为标题（如 `## 1.1 Session Layer Test`）。
 
 ### 软件域规则
 
@@ -375,7 +375,12 @@ Send DiagBy[<Addr>]Data[19 01]WithLen[1];
 5. **Session Layer 须测试多个 DTCStatusMask**（FF / 0x08 / 0x09），来自 GroupOfDTC 支持的 bit 位
 6. **不同子功能的合法 SF_DL 不同**，Incorrect Command 测试需标注合法值
 7. **DTC Read 必须按逐 DTC 生成**，每个 DTC 生成 t-09 活跃态 + t-08 恢复态各 1 条
-8. **输出格式严格按照 Case ID / Case名称 / 测试步骤 / 预期输出 的固定模板**
+8. **输出格式严格为 pipe table**，列顺序：`| Case ID | Case名称 | 测试步骤 | 预期输出 |`
+9. **顶级标题使用 `#`**：如 `# 1. Application Service_Physical Addressing`、`# 2. Application Service_Functional Addressing` 等
+10. **分类标题使用 `##`**：如 `## 1.1 Session Layer Test` 等
+11. **各大组之间用 `---` 分隔**
+12. **无符合条件的用例时使用 `>` 引用**
+13. **步骤中换行使用 `<br>` 标记**，不用 `\n`
 9. **Functional 寻址无论是否支持都必须生成全套用例**
 
 ### 分类 6: NRC Priority Test

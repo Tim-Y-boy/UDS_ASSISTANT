@@ -58,7 +58,7 @@
 - Boot 域使用 BootServices 表的 0x27 服务行
 - Boot 域的安全等级可能与 APP 域完全不同（如 APP 使用 L1/L2，Boot 使用 LevelFBL）
 - Boot 域需要完整镜像 APP 域的 Security Mechanism 测试
-- 两个域的用例集之间用注释行分隔，Boot 域用例编号接续 APP 域
+- 两个域的用例集之间用 `---` 分隔，Boot 域用例编号接续 APP 域
 
 ## 寻址规则
 
@@ -71,7 +71,7 @@
 
 ## 生成分类（共 10 类）
 
-按以下固定顺序逐类生成，每个分类之间用 `--service ID 0x27 <分类名>` 分隔。
+按以下固定顺序逐类生成，每个分类使用 `## N.N` 作为标题（如 `## 1.1 Session Layer Test`）。
 
 ---
 
@@ -117,7 +117,7 @@
 ### 分类 2: Secure Access Process Test (APP)
 #### 用例数量规则
 
-**固定 ~5 条**
+**固定 ~7 条**
 
 | 序号 | 场景 | 描述 |
 |------|------|------|
@@ -126,6 +126,8 @@
 | 3 | 正确流程：seed → key | 完整解锁正向 |
 | 4 | 错误流程：key → seed（不可逆） | NRC 序列错误 |
 | 5 | 错误流程：key → seed（不同等级） | 交叉等级序列错误 |
+| 6 | 重复请求 seed 返回相同数据 | 连续两次请求 seed，ECU 回复相同 seed |
+| 7 | 解锁成功后请求 seed 返回全零 | 解锁后再次请求，验证全零 seed |
 
 #### 用例命名规则
 
@@ -134,6 +136,8 @@
 - `Does not meet the secure access process, only sending the key; a negative test case`
 - `Meet the secure access process: request the seed first, then send the key – a PositiveResponse use case`
 - `Failure to comply with the secure access process: sending the key first, then requesting the seed`
+- `Repeated seed requests return the same seed data - PositiveResponse`
+- `After successful unlock, request seed returns all zeros - PositiveResponse`
 
 #### 测试步骤模板
 
@@ -166,6 +170,23 @@ Check: `Check DiagData[67 <KeySub>]Within[50]ms;`
 3. Send DiagBy[Physical]Data[27 <SeedSub>];
 ```
 Check: 第 2 步 NRC，第 3 步也可能 NRC
+
+**E. 重复请求 seed 返回相同数据：**
+```
+1. 进入 Extended 会话
+2. Send DiagBy[Physical]Data[27 <SeedSub>]AndCheckResp[PositiveResponse];
+3. Send DiagBy[Physical]Data[27 <SeedSub>]AndCheckResp[PositiveResponse];
+```
+Check: 第 2 步和第 3 步 ECU 返回的 seed 数据完全相同（`67 <SeedSub> <SeedData>` 一致）
+
+**F. 解锁成功后请求 seed 返回全零：**
+```
+1. 进入 Extended 会话
+2. Send DiagBy[Physical]Data[27 <SeedSub>]AndCheckResp[PositiveResponse];
+3. Send Security Right KeyBy[Physical]Level[<KeySub>];
+4. Send DiagBy[Physical]Data[27 <SeedSub>]AndCheckResp[PositiveResponse];
+```
+Check: 第 4 步 `Check DiagData[67 <SeedSub> 00 00 00 00]Within[50]ms;`（全零表示已解锁）
 
 ---
 
@@ -251,7 +272,7 @@ B1: 最大 seed 请求次数
 2. Send DiagBy[Physical]Data[27 <SeedSub>];（第1次，正常）
 3. Send DiagBy[Physical]Data[27 <SeedSub>];（第2次，正常）
 4. Send DiagBy[Physical]Data[27 <SeedSub>];（第3次，正常）
-5. Send DiagBy[Physical]Data[27 <SeedSub>];（第4次 → 0x37）
+5. Send DiagBy[Physical]Data[27 <SeedSub>];（第4次 → 0x36）
 ```
 
 B2-B8: 类似 A2-A8 但使用连续 seed 请求路径
@@ -521,6 +542,28 @@ Boot 域生成与 APP 域类似结构的测试集，但有以下差异：
 
 ---
 
+## 输出格式要求
+
+1. **输出格式严格为 pipe table**，列顺序：`| Case ID | Case名称 | 测试步骤 | 预期输出 |`
+2. **步骤中换行使用 `<br>` 标记**，不用 `\n`
+3. **不要生成任何"参数提取结果"或"分析"段落**，直接输出测试用例表格
+4. **每个分类标题使用 `## N.N` 格式**，如 `## 1.1 Session Layer Test`、`## 1.2 Secure Access Process Test`
+5. **各大组之间用 `---` 分隔**
+6. **无符合条件的用例时不生成该分类**
+
+### 输出示例
+
+```markdown
+# 1. Application Service_Physical Addressing
+
+## 1.1 Session Layer Test
+
+| Case ID | Case名称 | 测试步骤 | 预期输出 |
+|---------|---------|---------|---------|
+| Diag_0x27_Phy_001 | Default Session nonsupport 0x27 Service security access level 1 Negativecase-$27 | 1.Send DiagBy[Physical]Data[10 01];<br>2.Send DiagBy[Physical]Data[27 01]AndCheckResp[0x7F]; | 2.Check DiagData[7F 27 7F]Within[50]ms; |
+| Diag_0x27_Phy_002 | Extended Session support 0x27 Service security access level 1 PositiveResponsecase-$27 | 1.Send DiagBy[Physical]Data[10 03];<br>2.Send DiagBy[Physical]Data[27 01]AndCheckResp[PositiveResponse];<br>3.Send Security Right KeyBy[Physical]Level[0x02]; | 2.Check DiagData[67 01 XX XX XX XX]Within[50]ms;<br>3.Check DiagData[67 02]Within[50]ms; |
+```
+
 ## 生成注意事项
 
 1. **Case ID 不可重复**，物理寻址 `Diag_0x27_Phy_001` 起递增，功能寻址 `Diag_0x27_Fun_001` 起递增
@@ -531,7 +574,6 @@ Boot 域生成与 APP 域类似结构的测试集，但有以下差异：
 6. **FAAcounter = 3 后锁定，只有成功 Unlock 或 TimerLocked 超时才能清零**
 7. **Boot 域必须完整镜像 APP 域的 Security Mechanism 测试**
 8. **ECU Reset 包含 Software Reset(11 03)**
-9. **输出格式严格按照 Case ID / Case名称 / 测试步骤 / 预期输出 的固定模板**
 
 ---
 
@@ -540,7 +582,7 @@ Boot 域生成与 APP 域类似结构的测试集，但有以下差异：
 | 分类 | 描述 | APP Physical | APP Functional | Boot Physical | Boot Functional |
 |------|------|-------------|---------------|--------------|----------------|
 | 1. Session Layer | 会话 × 等级 | ~6 | - | ~6 | - |
-| 2. Secure Access Process | seed/key 流程 | ~5 | - | ~5 | - |
+| 2. Secure Access Process | seed/key 流程 | ~7 | - | ~7 | - |
 | 3. Security Mechanism | 错误密钥 + 连续 seed（双路径） | ~16 | - | ~16 | - |
 | 4. Secure Access Time | 解锁后持续时间 | 1 | - | 1 | - |
 | 5. ECU Reset | 4种复位 | 4 | - | 4 | - |
@@ -549,5 +591,5 @@ Boot 域生成与 APP 域类似结构的测试集，但有以下差异：
 | 8. NRC Priority | NRC 优先级 | 1 | - | 1 | - |
 | 9. Boot Domain | Boot 完整测试 | - | - | (above) | - |
 | 10. Functional | No_Response | - | 2 | - | 3 |
-| **小计** | | **~36** | **2** | **~35** | **3** |
-| **总计** | **~76 条** | | | | |
+| **小计** | | **~40** | **2** | **~39** | **3** |
+| **总计** | **~84 条** | | | | |

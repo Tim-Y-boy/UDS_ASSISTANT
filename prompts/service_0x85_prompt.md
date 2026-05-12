@@ -35,7 +35,7 @@
 - **必须为 APP 和 Boot 两个软件域各独立生成完整用例集**
 - APP 域：0x85 通常在 Extended 会话支持
 - Boot 域：0x85 通常不支持，所有测试预期 `7F 85 7F`（Physical）或 `No_Response`（Functional）
-- 两个域的用例集之间用注释行分隔，Boot 域用例编号接续 APP 域
+- 两个域的用例集之间用 `---` 分隔，Boot 域用例编号接续 APP 域
 
 ## 寻址规则
 
@@ -48,7 +48,7 @@
 
 ## 生成分类（共 9 类）
 
-按以下固定顺序逐类生成，每个分类之间用 `--service ID 0x85 <分类名>` 分隔。
+按以下固定顺序逐类生成，每个分类使用 `## N.N` 作为标题（如 `## 1.1 Session Layer Test`）。
 
 ---
 
@@ -389,7 +389,12 @@ Check: `Check DiagData[7F 85 7F]Within[50]ms;`（即使 FBL 解锁，0x85 仍不
 5. **Boot 域所有 0x85 测试均返回 7F 85 7F**（不支持）
 6. **Boot 域安全等级为 LevelFBL（27 11/27 12）**
 7. **DTC Setting Function Test（完整功能验证）作为可选扩展**，如果参数表提供了 DTC 和故障触发信息
-8. **输出格式严格按照 Case ID / Case名称 / 测试步骤 / 预期输出 的固定模板**
+8. **输出格式严格为 pipe table**，列顺序：`| Case ID | Case名称 | 测试步骤 | 预期输出 |`
+9. **顶级标题使用 `#`**：如 `# 1. Application Service_Physical Addressing`、`# 2. Application Service_Functional Addressing` 等
+10. **分类标题使用 `##`**：如 `## 1.1 Session Layer Test` 等
+11. **各大组之间用 `---` 分隔**
+12. **无符合条件的用例时使用 `>` 引用**
+13. **步骤中换行使用 `<br>` 标记**，不用 `\n`
 
 ---
 

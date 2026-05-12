@@ -30,7 +30,7 @@
 
 ## 生成分类（共 4 类）
 
-按以下固定顺序逐类生成，每个分类之间用 `--service ID 0x2E <分类名>` 分隔。
+按以下固定顺序逐类生成，每个分类使用 `## N.N` 作为标题（如 `## 1.1 Session Layer Test`）。
 
 ---
 
@@ -228,4 +228,9 @@
 5. **0x2E 无子功能概念**，不存在 NRC 0x12，不可写的 DID 返回 NRC 0x31
 6. **未解锁写入返回 NRC 0x33**（Security Access Denied）
 7. **持久化测试后必须恢复原始值**
-8. **输出格式严格按照 Case ID / Case名称 / 测试步骤 / 预期输出 的固定模板**
+8. **输出格式严格为 pipe table**，列顺序：`| Case ID | Case名称 | 测试步骤 | 预期输出 |`
+9. **顶级标题使用 `#`**：如 `# 1. Application Service_Physical Addressing`、`# 2. Application Service_Functional Addressing` 等
+10. **分类标题使用 `##`**：如 `## 1.1 Session Layer Test` 等
+11. **各大组之间用 `---` 分隔**
+12. **无符合条件的用例时使用 `>` 引用**
+13. **步骤中换行使用 `<br>` 标记**，不用 `\n`
