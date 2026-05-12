@@ -506,7 +506,7 @@ async def generate_test_cases(
     domain: str = Form("App"),
     id: str = Form(...),
     username: str = Form(...),
-    real_name: str = Form(...),
+    realName: str = Form(...),
 ):
     """异步生成测试用例：校验通过后立即返回，处理完成后回调通知结果。"""
     if not file.filename:
@@ -537,7 +537,7 @@ async def generate_test_cases(
     content = await file.read()
     saved_path.write_bytes(content)
 
-    author = f"{real_name}-{username}"
+    author = f"{realName}-{username}"
 
     # 启动后台任务
     asyncio.create_task(
